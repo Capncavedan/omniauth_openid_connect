@@ -198,7 +198,17 @@ module OmniAuth
       end
 
       def user_info
-        @user_info ||= access_token.userinfo!
+        return @user_info if defined?(@user_info)
+
+        user_info_endpoint_return = access_token.userinfo! rescue $!
+
+        if user_info_endpoint_return.is_a?(::OpenIDConnect::HttpError)
+          @user_info = fetch_user_info_from_id_token(user_info_endpoint_return)
+        elsif user_info_endpoint_return.is_a?(Exception)
+          raise user_info_endpoint_return
+        else
+          @user_info = user_info_endpoint_return
+        end
       end
 
       def access_token
@@ -326,6 +336,14 @@ module OmniAuth
         decode_id_token(params['id_token']).verify!(issuer: options.issuer,
                                                     client_id: client_options.identifier,
                                                     nonce: stored_nonce)
+      end
+
+      def fetch_user_info_from_id_token(user_info_endpoint_return)
+        if configured_response_type == "code" && access_token.id_token.present?
+          ::OpenIDConnect::ResponseObject::UserInfo.new(decode_id_token(access_token.id_token).raw_attributes)
+        else
+          raise user_info_endpoint_return
+        end
       end
 
       class CallbackError < StandardError
