@@ -30,6 +30,7 @@ module OmniAuth
                               port: 443,
                               authorization_endpoint: '/authorize',
                               token_endpoint: '/token',
+                              token_request_options: nil,
                               userinfo_endpoint: '/userinfo',
                               jwks_uri: '/jwk',
                               end_session_endpoint: nil)
@@ -213,8 +214,10 @@ module OmniAuth
 
       def access_token
         @access_token ||= client.access_token!(
-          scope: (options.scope if options.send_scope_to_token_endpoint),
-          client_auth_method: options.client_auth_method
+          {
+            scope: (options.scope if options.send_scope_to_token_endpoint),
+            client_auth_method: options.client_auth_method
+          }.merge(client_options.token_request_options || {})
         )
       end
 
