@@ -33,7 +33,8 @@ module OmniAuth
                               token_request_options: nil,
                               userinfo_endpoint: '/userinfo',
                               jwks_uri: '/jwk',
-                              end_session_endpoint: nil)
+                              end_session_endpoint: nil,
+                              force_token_type: nil)
 
       option :issuer
       option :discovery, false
@@ -93,7 +94,12 @@ module OmniAuth
       end
 
       def client
-        @client ||= ::OpenIDConnect::Client.new(client_options)
+        return @client if defined?(@client)
+        @client = ::OpenIDConnect::Client.new(client_options)
+        unless client_options.force_token_type.to_s.empty?
+          @client.force_token_type!(client_options.force_token_type)
+        end
+        @client
       end
 
       def config
@@ -123,6 +129,13 @@ module OmniAuth
         client.redirect_uri = redirect_uri
 
         return id_token_callback_phase if configured_response_type == 'id_token'
+
+        if configured_response_type == 'code' &&
+            !params['id_token'].to_s.blank? &&
+            client_options.force_token_type == "facebook_workplace_id_token"
+          verify_id_token!(force_verify: true)
+          return id_token_callback_phase
+        end
 
         client.authorization_code = authorization_code
         access_token
@@ -333,8 +346,8 @@ module OmniAuth
         @configured_response_type ||= options.response_type.to_s
       end
 
-      def verify_id_token!
-        return unless configured_response_type == 'id_token'
+      def verify_id_token!(force_verify: false)
+        return unless configured_response_type == 'id_token' || force_verify
 
         decode_id_token(params['id_token']).verify!(issuer: options.issuer,
                                                     client_id: client_options.identifier,
